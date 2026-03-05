@@ -6,7 +6,7 @@ from .repo_cloner import clone_repos, collect_source_files
 from .composer import resolve_composer_deps, resolve_all_composer_deps
 from .dataset import GitHubCodeDataset, build_data_loader
 from .training import (
-    setup_device,
+    set_up_device,
     cosine_lr,
     TrainingContext,
 )

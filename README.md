@@ -31,7 +31,7 @@ pip install -e ".[dev]"
 
 ```python
 from kaggle_utilities import clone_repos, collect_source_files, build_data_loader
-from kaggle_utilities.training import setup_device, TrainingContext
+from kaggle_utilities.training import set_up_device, TrainingContext
 
 # Clone repos
 clone_repos()
@@ -42,7 +42,7 @@ loader, tokenizer = build_data_loader(files)
 
 # Set up training
 model = YourModel()
-model, device = setup_device(model)
+model, device = set_up_device(model)
 ctx = TrainingContext(model=model, max_steps=2000)
 ```
 

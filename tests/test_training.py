@@ -8,7 +8,7 @@ import pytest
 
 from kaggle_utilities.training import (
     LossUnsqueezeWrapper,
-    setup_device,
+    set_up_device,
     cosine_lr,
     get_amp_context,
     get_grad_scaler,
@@ -67,7 +67,7 @@ class TestLossUnsqueezeWrapper:
 class TestSetupDevice:
     def test_cpu_no_wrapping(self):
         model = DummyModel()
-        result_model, device = setup_device(model, use_data_parallel=True)
+        result_model, device = set_up_device(model, use_data_parallel=True)
         if not torch.cuda.is_available():
             assert device == torch.device("cpu")
             assert not isinstance(result_model, nn.DataParallel)

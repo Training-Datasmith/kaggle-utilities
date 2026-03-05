@@ -42,7 +42,7 @@ class LossUnsqueezeWrapper(nn.Module):
             return getattr(self.model, name)
 
 
-def setup_device(
+def set_up_device(
     model: nn.Module,
     use_data_parallel: bool = True,
 ) -> tuple[nn.Module, torch.device]:
@@ -193,7 +193,7 @@ class TrainingContext:
         self.checkpoint_dir = checkpoint_dir
 
         # Device setup
-        self.model, self.device = setup_device(model, use_data_parallel)
+        self.model, self.device = set_up_device(model, use_data_parallel)
 
         # Optimizer (applied to the underlying model's parameters)
         self.optimizer = torch.optim.AdamW(
