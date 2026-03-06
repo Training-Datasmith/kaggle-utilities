@@ -128,8 +128,7 @@ class TrainingContext:
         inner_model = unwrap_model(self.model)
         torch.save(inner_model.state_dict(), model_path)
 
-        status = self._status_line(self._last_loss)
-        print(f"Checkpoint saved: {name} | {status}")
+        print(f"Checkpoint saved: {name}")
 
         # Full resume checkpoint
         resume_state = {
@@ -162,7 +161,7 @@ class TrainingContext:
         """
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         if not os.path.isfile(resume_path):
-            print("No checkpoint found — starting from scratch.")
+            print("No checkpoint found â starting from scratch.")
             return False
 
         ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
