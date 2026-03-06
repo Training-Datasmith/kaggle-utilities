@@ -187,7 +187,7 @@ class TrainingContext:
         torch.random.set_rng_state(ckpt["rng_torch"].cpu())
         if torch.cuda.is_available() and "rng_cuda" in ckpt:
             for i, state in enumerate(ckpt["rng_cuda"]):
-                torch.cuda.set_rng_state(state, i)
+                torch.cuda.set_rng_state(state.cpu(), i)
 
         # Reprint the status from when the checkpoint was saved
         status = ckpt.get("status_line") or self._status_line(self._last_loss)
