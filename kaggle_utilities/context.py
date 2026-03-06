@@ -285,7 +285,9 @@ class TrainingContext:
     def should_save(self) -> bool:
         return self._step > 0 and self._step % self.save_interval == 0
 
-    def log(self, loss: float):
+    def log(self, loss: float = None):
         """Print training metrics for the current step."""
+        if loss is None:
+            loss = self._last_loss
         elapsed = time.time() - self._step_start_time
         print(f"{self._status_line(loss)} | time {elapsed:.1f}s")
