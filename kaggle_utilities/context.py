@@ -25,18 +25,17 @@ class TrainingContext:
     """
     Manages the training loop boilerplate: device setup, optimizer,
     LR schedule, AMP, gradient accumulation, logging, and checkpointing.
-
     Transparently handles CPU, single GPU, and multi-GPU (DataParallel).
 
     Usage:
+
         ctx = TrainingContext(
-            model=model,
-            max_steps=20000,
-            learning_rate=3e-4,
+            model=model, max_steps=20000, learning_rate=3e-4,
             grad_accum_steps=16,
             checkpoint_dir="/kaggle/working/checkpoints",
         )
-        ctx.load_checkpoint()  # resume from previous run if available
+        ctx.load_checkpoint()   # resume from previous run if available
+
         for step, batch in ctx.training_steps(data_loader):
             loss = ctx.forward_backward(batch)
             if ctx.step_optimizer():
@@ -91,11 +90,23 @@ class TrainingContext:
         self._step_start_time = time.time()
         self.epoch_complete = False
 
+        # Cumulative stats (persisted across runs via checkpoint)
+        self._initial_loss = None
+        self._cumulative_time = 0.0
+
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     @property
     def step(self) -> int:
         return self._step
+
+    @property
+    def initial_loss(self) -> float | None:
+        return self._initial_loss
+
+    @property
+    def cumulative_time(self) -> float:
+        return self._cumulative_time
 
     # ------------------------------------------------------------------
     # Status
@@ -119,15 +130,14 @@ class TrainingContext:
         Save a full training checkpoint (model, optimizer, scaler, step,
         RNG states) and print the current training status.
 
-        Also saves a lightweight model-only snapshot named by step or
-        suffix.  A 'resume.pt' is always written so that
-        load_checkpoint() can find it.
+        Also saves a lightweight model-only snapshot named by step or suffix.
+        A 'resume.pt' is always written so that load_checkpoint() can find it.
         """
         name = suffix or f"step_{self._step}"
+
         model_path = os.path.join(self.checkpoint_dir, f"{name}.pt")
         inner_model = unwrap_model(self.model)
         torch.save(inner_model.state_dict(), model_path)
-
         print(f"Checkpoint saved: {name}")
 
         # Full resume checkpoint
@@ -140,14 +150,19 @@ class TrainingContext:
             "rng_python": random.getstate(),
             "rng_numpy": np.random.get_state(),
             "rng_torch": torch.random.get_rng_state(),
+            "initial_loss": self._initial_loss,
+            "cumulative_time": self._cumulative_time,
         }
+
         if self.scaler is not None:
             resume_state["scaler_state_dict"] = self.scaler.state_dict()
+
         if torch.cuda.is_available():
             resume_state["rng_cuda"] = [
                 torch.cuda.get_rng_state(i)
                 for i in range(torch.cuda.device_count())
             ]
+
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         torch.save(resume_state, resume_path)
 
@@ -156,15 +171,16 @@ class TrainingContext:
         Restore training state from a previous checkpoint if one exists.
 
         Reprints the status line from the checkpoint so the user can see
-        where training left off.  Returns True if a checkpoint was
-        loaded, False otherwise.
+        where training left off.  Returns True if a checkpoint was loaded,
+        False otherwise.
         """
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         if not os.path.isfile(resume_path):
             print("No checkpoint found -- starting from scratch.")
             return False
 
-        ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
+        ckpt = torch.load(resume_path, map_location=self.device,
+                          weights_only=False)
 
         # Model
         inner_model = unwrap_model(self.model)
@@ -183,10 +199,15 @@ class TrainingContext:
         self.max_steps += self._step
         self._last_loss = ckpt.get("last_loss")
 
+        # Cumulative stats
+        self._initial_loss = ckpt.get("initial_loss")
+        self._cumulative_time = ckpt.get("cumulative_time", 0.0)
+
         # RNG states
         random.setstate(ckpt["rng_python"])
         np.random.set_state(ckpt["rng_numpy"])
         torch.random.set_rng_state(ckpt["rng_torch"].cpu())
+
         if torch.cuda.is_available() and "rng_cuda" in ckpt:
             for i, state in enumerate(ckpt["rng_cuda"]):
                 torch.cuda.set_rng_state(state.cpu(), i)
@@ -212,6 +233,7 @@ class TrainingContext:
         """
         self.epoch_complete = False
         data_iter = iter(data_loader)
+
         while self._step < self.max_steps:
             try:
                 batch = next(data_iter)
@@ -233,7 +255,8 @@ class TrainingContext:
         with self.amp_context:
             output = self.model(input_ids=input_ids, labels=labels)
             loss = reduce_loss(output["loss"])
-            scaled_loss = loss / self.grad_accum_steps
+
+        scaled_loss = loss / self.grad_accum_steps
 
         if self.scaler is not None:
             self.scaler.scale(scaled_loss).backward()
@@ -257,7 +280,7 @@ class TrainingContext:
 
         # Update LR
         lr = cosine_lr(self._step, self.max_steps, self.learning_rate,
-                        self.warmup_steps)
+                       self.warmup_steps)
         for pg in self.optimizer.param_groups:
             pg["lr"] = lr
 
@@ -291,3 +314,12 @@ class TrainingContext:
             loss = self._last_loss
         elapsed = time.time() - self._step_start_time
         print(f"{self._status_line(loss)} | time {elapsed:.1f}s")
+
+    def record_initial_loss(self, loss: float):
+        """Record the very first training loss (only sets once)."""
+        if self._initial_loss is None:
+            self._initial_loss = loss
+
+    def add_run_time(self, run_time: float):
+        """Add this run's elapsed time to the cumulative total."""
+        self._cumulative_time += run_time
