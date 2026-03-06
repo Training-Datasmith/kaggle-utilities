@@ -87,6 +87,7 @@ class TrainingContext:
         self._step = 0
         self._micro_step = 0
         self._accumulated_loss = 0.0
+        self._last_loss = None
         self._step_start_time = time.time()
         self.epoch_complete = False
 
@@ -97,28 +98,44 @@ class TrainingContext:
         return self._step
 
     # ------------------------------------------------------------------
+    # Status
+    # ------------------------------------------------------------------
+
+    def _status_line(self, loss: float | None = None) -> str:
+        """Format a one-line training status summary."""
+        lr = self.optimizer.param_groups[0]["lr"]
+        parts = [f"step {self._step}/{self.max_steps}"]
+        if loss is not None:
+            parts.append(f"loss {loss:.4f}")
+        parts.append(f"lr {lr:.2e}")
+        return " | ".join(parts)
+
+    # ------------------------------------------------------------------
     # Checkpoint resume
     # ------------------------------------------------------------------
 
     def save_checkpoint(self, suffix: str | None = None):
         """
         Save a full training checkpoint (model, optimizer, scaler, step,
-        RNG states).  Also saves a lightweight model-only snapshot.
+        RNG states) and print the current training status.
 
-        With no suffix the file is named 'step_{N}.pt' and an additional
-        'resume.pt' is written so that load_checkpoint() can find it.
-        A suffix like 'final' produces 'final.pt' and also writes
-        'resume.pt'.
+        Also saves a lightweight model-only snapshot named by step or
+        suffix.  A 'resume.pt' is always written so that
+        load_checkpoint() can find it.
         """
         name = suffix or f"step_{self._step}"
         model_path = os.path.join(self.checkpoint_dir, f"{name}.pt")
         inner_model = unwrap_model(self.model)
         torch.save(inner_model.state_dict(), model_path)
-        print(f"Saved model checkpoint: {model_path}")
+
+        status = self._status_line(self._last_loss)
+        print(f"Checkpoint saved: {name} | {status}")
 
         # Full resume checkpoint
         resume_state = {
             "step": self._step,
+            "last_loss": self._last_loss,
+            "status_line": status,
             "model_state_dict": inner_model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "rng_python": random.getstate(),
@@ -134,20 +151,20 @@ class TrainingContext:
             ]
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         torch.save(resume_state, resume_path)
-        print(f"Saved resume checkpoint: {resume_path}")
 
     def load_checkpoint(self) -> bool:
         """
         Restore training state from a previous checkpoint if one exists.
 
-        Returns True if a checkpoint was loaded, False otherwise.
+        Reprints the status line from the checkpoint so the user can see
+        where training left off.  Returns True if a checkpoint was
+        loaded, False otherwise.
         """
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         if not os.path.isfile(resume_path):
-            print("No resume checkpoint found — starting from scratch.")
+            print("No checkpoint found — starting from scratch.")
             return False
 
-        print(f"Loading checkpoint: {resume_path}")
         ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
 
         # Model
@@ -161,8 +178,9 @@ class TrainingContext:
         if self.scaler is not None and "scaler_state_dict" in ckpt:
             self.scaler.load_state_dict(ckpt["scaler_state_dict"])
 
-        # Step
+        # Step & loss
         self._step = ckpt["step"]
+        self._last_loss = ckpt.get("last_loss")
 
         # RNG states
         random.setstate(ckpt["rng_python"])
@@ -172,7 +190,9 @@ class TrainingContext:
             for i, state in enumerate(ckpt["rng_cuda"]):
                 torch.cuda.set_rng_state(state, i)
 
-        print(f"Resumed from step {self._step}.")
+        # Reprint the status from when the checkpoint was saved
+        status = ckpt.get("status_line") or self._status_line(self._last_loss)
+        print(f"Checkpoint loaded: {status}")
         return True
 
     # ------------------------------------------------------------------
@@ -251,6 +271,7 @@ class TrainingContext:
             self.optimizer.step()
 
         self.optimizer.zero_grad()
+        self._last_loss = self._accumulated_loss / self.grad_accum_steps
         self._step += 1
         self._micro_step = 0
         self._accumulated_loss = 0.0
@@ -265,10 +286,5 @@ class TrainingContext:
 
     def log(self, loss: float):
         """Print training metrics for the current step."""
-        lr = self.optimizer.param_groups[0]["lr"]
         elapsed = time.time() - self._step_start_time
-        print(
-            f"step {self._step}/{self.max_steps} | "
-            f"loss {loss:.4f} | lr {lr:.2e} | "
-            f"time {elapsed:.1f}s"
-        )
+        print(f"{self._status_line(loss)} | time {elapsed:.1f}s")
