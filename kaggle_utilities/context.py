@@ -179,6 +179,8 @@ class TrainingContext:
 
         # Step & loss
         self._step = ckpt["step"]
+        # max_steps is per-run: extend ceiling so we train max_steps MORE
+        self.max_steps += self._step
         self._last_loss = ckpt.get("last_loss")
 
         # RNG states
