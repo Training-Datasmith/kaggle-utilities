@@ -161,7 +161,7 @@ class TrainingContext:
         """
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         if not os.path.isfile(resume_path):
-            print("No checkpoint found â starting from scratch.")
+            print("No checkpoint found -- starting from scratch.")
             return False
 
         ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
@@ -184,7 +184,7 @@ class TrainingContext:
         # RNG states
         random.setstate(ckpt["rng_python"])
         np.random.set_state(ckpt["rng_numpy"])
-        torch.random.set_rng_state(ckpt["rng_torch"])
+        torch.random.set_rng_state(ckpt["rng_torch"].cpu())
         if torch.cuda.is_available() and "rng_cuda" in ckpt:
             for i, state in enumerate(ckpt["rng_cuda"]):
                 torch.cuda.set_rng_state(state, i)
