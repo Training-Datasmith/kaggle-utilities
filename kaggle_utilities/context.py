@@ -191,9 +191,9 @@ class TrainingContext:
             for i, state in enumerate(ckpt["rng_cuda"]):
                 torch.cuda.set_rng_state(state.cpu(), i)
 
-        # Reprint the status from when the checkpoint was saved
-        status = ckpt.get("status_line") or self._status_line(self._last_loss)
-        print(f"Checkpoint loaded: {status}")
+        # Reset timer and log current state with updated max_steps ceiling
+        self._step_start_time = time.time()
+        self.log()
         return True
 
     # ------------------------------------------------------------------
