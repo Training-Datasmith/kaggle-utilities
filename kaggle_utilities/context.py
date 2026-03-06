@@ -161,7 +161,7 @@ class TrainingContext:
         """
         resume_path = os.path.join(self.checkpoint_dir, self.RESUME_FILENAME)
         if not os.path.isfile(resume_path):
-            print("No checkpoint found â starting from scratch.")
+            print("No checkpoint found — starting from scratch.")
             return False
 
         ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
