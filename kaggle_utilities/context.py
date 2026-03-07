@@ -299,7 +299,6 @@ class TrainingContext:
         self._step += 1
         self._micro_step = 0
         self._accumulated_loss = 0.0
-        self._step_start_time = time.time()
         return True
 
     def should_log(self) -> bool:
@@ -313,6 +312,7 @@ class TrainingContext:
         if loss is None:
             loss = self._last_loss
         elapsed = time.time() - self._step_start_time
+        self._step_start_time = time.time()
         print(f"{self._status_line(loss)} | time {elapsed:.1f}s")
 
     def record_initial_loss(self, loss: float):
