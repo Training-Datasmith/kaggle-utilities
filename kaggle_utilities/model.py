@@ -157,9 +157,12 @@ class OLMo3Mini(nn.Module):
         cos, sin = self.rope(T)
 
         for layer in self.layers:
-            x = torch.utils.checkpoint.checkpoint(
-                layer, x, cos, sin, use_reentrant=False,
-            )
+            if self.training:
+                x = torch.utils.checkpoint.checkpoint(
+                    layer, x, cos, sin, use_reentrant=False,
+                )
+            else:
+                x = layer(x, cos, sin)
 
         x = self.norm(x)
 
