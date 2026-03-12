@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .model import RoPE, apply_rope
+from .model import RMSNorm, RoPE, apply_rope
 
 
 def _ste(quantized: torch.Tensor, original: torch.Tensor) -> torch.Tensor:
@@ -45,7 +45,7 @@ class BitLinear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        self.norm = nn.RMSNorm(in_features)
+        self.norm = RMSNorm(in_features)
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
         else:
@@ -122,9 +122,9 @@ class BitTransformerBlock(nn.Module):
 
     def __init__(self, d_model: int, n_heads: int, n_kv_heads: int, d_ff: int):
         super().__init__()
-        self.norm1 = nn.RMSNorm(d_model)
+        self.norm1 = RMSNorm(d_model)
         self.attn = BitGQAAttention(d_model, n_heads, n_kv_heads)
-        self.norm2 = nn.RMSNorm(d_model)
+        self.norm2 = RMSNorm(d_model)
         self.ffn = BitSwiGLUFFN(d_model, d_ff)
 
     def forward(
@@ -163,7 +163,7 @@ class OLMo3BitNet(nn.Module):
             BitTransformerBlock(d_model, n_heads, n_kv_heads, d_ff)
             for _ in range(n_layers)
         ])
-        self.norm = nn.RMSNorm(d_model)
+        self.norm = RMSNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
 
         # Weight tying

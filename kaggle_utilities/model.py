@@ -9,6 +9,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class RMSNorm(nn.Module):
+    """RMSNorm that casts weight to input dtype for AMP fused-kernel compatibility."""
+
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.rms_norm(x, self.weight.shape, self.weight.to(x.dtype), self.eps)
+
+
 class RoPE(nn.Module):
     """Rotary Position Embeddings."""
 
@@ -91,9 +103,9 @@ class TransformerBlock(nn.Module):
 
     def __init__(self, d_model: int, n_heads: int, n_kv_heads: int, d_ff: int):
         super().__init__()
-        self.norm1 = nn.RMSNorm(d_model)
+        self.norm1 = RMSNorm(d_model)
         self.attn = GQAAttention(d_model, n_heads, n_kv_heads)
-        self.norm2 = nn.RMSNorm(d_model)
+        self.norm2 = RMSNorm(d_model)
         self.ffn = SwiGLUFFN(d_model, d_ff)
 
     def forward(
@@ -130,7 +142,7 @@ class OLMo3Mini(nn.Module):
             TransformerBlock(d_model, n_heads, n_kv_heads, d_ff)
             for _ in range(n_layers)
         ])
-        self.norm = nn.RMSNorm(d_model)
+        self.norm = RMSNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
 
         # Weight tying
