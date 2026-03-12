@@ -7,6 +7,7 @@ from .composer import resolve_composer_deps, resolve_all_composer_deps
 from .dataset import GitHubCodeDataset, build_data_loader
 from .training import set_up_device, cosine_lr
 from .context import TrainingContext
+from .bitnet_model import BitLinear, OLMo3BitNet
 from .formatting import human_number
 from .model_store import (
     download_checkpoint,
