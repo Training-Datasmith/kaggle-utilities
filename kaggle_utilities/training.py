@@ -64,7 +64,21 @@ def cosine_lr(step: int, max_steps: int, learning_rate: float,
     if step < warmup_steps:
         return learning_rate * step / warmup_steps
     progress = (step - warmup_steps) / max(1, max_steps - warmup_steps)
+    progress = min(progress, 1.0)
     return learning_rate * 0.5 * (1 + math.cos(math.pi * progress))
+
+
+def inverse_sqrt_lr(step: int, learning_rate: float,
+                    warmup_steps: int = 500) -> float:
+    """
+    Inverse square root learning rate schedule with linear warmup.
+
+    After warmup, LR decays as sqrt(warmup_steps / step). No fixed horizon
+    needed -- works for any training duration across multiple runs.
+    """
+    if step < warmup_steps:
+        return learning_rate * step / warmup_steps
+    return learning_rate * (warmup_steps / step) ** 0.5
 
 
 def get_amp_context(device: torch.device):

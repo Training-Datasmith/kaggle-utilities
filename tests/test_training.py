@@ -10,6 +10,7 @@ from kaggle_utilities.training import (
     LossUnsqueezeWrapper,
     set_up_device,
     cosine_lr,
+    inverse_sqrt_lr,
     get_amp_context,
     get_grad_scaler,
     unwrap_model,
@@ -108,6 +109,40 @@ class TestCosineLR:
             max_lr=1e-3, min_lr=1e-5,
         )
         assert lr == pytest.approx(1e-5)
+
+
+class TestInverseSqrtLR:
+    def test_zero_at_start(self):
+        lr = inverse_sqrt_lr(step=0, learning_rate=1e-3, warmup_steps=100)
+        assert lr == 0.0
+
+    def test_warmup_midpoint(self):
+        lr = inverse_sqrt_lr(step=50, learning_rate=1e-3, warmup_steps=100)
+        assert lr == pytest.approx(5e-4)
+
+    def test_peak_at_warmup_end(self):
+        lr = inverse_sqrt_lr(step=100, learning_rate=1e-3, warmup_steps=100)
+        assert lr == pytest.approx(1e-3)
+
+    def test_monotonically_decreasing_after_warmup(self):
+        lrs = [inverse_sqrt_lr(s, 1e-3, 100) for s in range(100, 10001, 100)]
+        for i in range(1, len(lrs)):
+            assert lrs[i] < lrs[i - 1]
+
+    def test_never_reaches_zero(self):
+        lr = inverse_sqrt_lr(step=1_000_000, learning_rate=1e-3, warmup_steps=100)
+        assert lr > 0
+
+    def test_known_value(self):
+        # At step 400, warmup=100: lr = 1e-3 * sqrt(100/400) = 5e-4
+        lr = inverse_sqrt_lr(step=400, learning_rate=1e-3, warmup_steps=100)
+        assert lr == pytest.approx(5e-4)
+
+    def test_no_horizon_needed(self):
+        """LR should be well-defined at any step count without a max_steps param."""
+        for step in [500, 5000, 50000, 500000]:
+            lr = inverse_sqrt_lr(step, 3e-4, 500)
+            assert 0 < lr <= 3e-4
 
 
 class TestReduceLoss:

@@ -5,7 +5,7 @@ __version__ = "0.1.0"
 from .repo_cloner import clone_repos, collect_source_files
 from .composer import resolve_composer_deps, resolve_all_composer_deps
 from .dataset import GitHubCodeDataset, build_data_loader
-from .training import set_up_device, cosine_lr
+from .training import set_up_device, cosine_lr, inverse_sqrt_lr
 from .context import TrainingContext
 from .bitnet_model import BitLinear, OLMo3BitNet
 from .formatting import human_number

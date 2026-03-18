@@ -12,8 +12,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .training import (
-    cosine_lr,
     get_amp_context,
+    inverse_sqrt_lr,
     get_grad_scaler,
     reduce_loss,
     set_up_device,
@@ -279,8 +279,7 @@ class TrainingContext:
             return False
 
         # Update LR
-        lr = cosine_lr(self._step, self.max_steps, self.learning_rate,
-                       self.warmup_steps)
+        lr = inverse_sqrt_lr(self._step, self.learning_rate, self.warmup_steps)
         for pg in self.optimizer.param_groups:
             pg["lr"] = lr
 
